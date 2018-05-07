@@ -28,7 +28,25 @@ def enable_Cisco(module,remote_conn):
     time.sleep(1)
     output = remote_conn.recv(5000)
 
+def get_vlan_arp(module,remote_conn,file,interfaces,addresses):
+    remote_conn.send("show arp" + "\n")
+    time.sleep(1)
+    output = remote_conn.recv(5000)
+    arpTable = output.split("\n")
+    for x in xrange(0,len(addresses)):
+        #remove \n
+        tmp = addresses[x].rstrip()
+        indices = [i for i, s in enumerate(arpTable) if tmp in s]
+        chaine = arpTable[indices[0]].split()
+        indices = [i for i, s in enumerate(chaine) if "Vlan" in s]
+        var = chaine[indices[0]].split("Vlan")
+        numVlan = var[1]
+        interfaces[x] = interfaces[x].rstrip()
+        file.write(interfaces[x] + " " + numVlan + "\n")
+        #interfaces : [0] nom [1] interface interne [2] interface externe
+
 def get_neighbors_cisco(module,remote_conn,file):
+    #recuperation des donnees
     remote_conn.send("show lldp neighbors" + "\n")
     time.sleep(1)
     output = remote_conn.recv(5000)
@@ -38,14 +56,45 @@ def get_neighbors_cisco(module,remote_conn,file):
         lldpTable.pop(0)
     for x in xrange(0,4):
         lldpTable.pop()
-    #tri des données
+    #tri des donnees
+    interfaces = []
     for x in xrange(0,len(lldpTable)):
         var = lldpTable[x].split()
         if len(var) == 4:
-            interfaces = var[1] + "\t" + var [3] + "\n"
+            s = list(var[3])
+            s[1] = "/"
+            var[3] = ''.join(s)
+            interfaces.append(var[0] + "\t" + var[1] + "\t" + var [3] + "\n")  
         elif len(var) == 5:
-            interfaces = var[1] + "\t" + var [4] + "\n"
-        file.write(interfaces)
+            interfaces.append(var[0] + "\t" + var[1] + "\t" + var [4] + "\n") 
+    #recuperation des addresses ip
+    addresses = []
+    for x in xrange(0,len(interfaces)):
+        var = interfaces[x].split() 
+        remote_conn.send("show lldp entry " + var[0] + "\n")
+        time.sleep(1)
+        output = remote_conn.recv(5000)
+        tmp = output.split("\n")
+
+        if "Cisco IOS Software" in output:
+            #Cisco => show cdp
+            remote_conn.send("show cdp entry *\n")
+            time.sleep(1)
+            output = remote_conn.recv(5000)
+            tmp = output.split("-------------------------")
+            for x in xrange(0,len(tmp)):
+                if var[0] in tmp[x]:
+                    listTmp = tmp[x].split("\n")
+                    indices = [i for i, s in enumerate(listTmp) if "address:" in s]
+                    chaine = listTmp[indices[0]]
+                    listTmp = chaine.split(": ")
+                    addresses.append(listTmp[1])
+                    break
+                    #adresse IP de Cisco retrouvee et ok
+        else:
+            addresses.append(var[0] + "\n")
+    #adresse IP pour Cisco num serie pour Alcatel Toutes donnees OK pour Recuperer la table ARP
+    get_vlan_arp(module,remote_conn,file,interfaces,addresses)
 
 def get_lldp_cisco(module,result):
     try:
@@ -100,13 +149,6 @@ def Groupe(module):
         time.sleep(1)
         output = remote_conn.recv(5000)
 
-#        for item in list():
-#            remote_conn.send(item + "\n")
-#            time.sleep(2)
-#            output = remote_conn.recv(5000)
-#            file.write(output)
-#        file.close()
-        
         result.update({
         'changed': False,
         'stdout': output,
