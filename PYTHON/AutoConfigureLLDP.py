@@ -16,21 +16,39 @@ from ansible.utils.display import Display
 def disable_paging(remote_conn):
     "Disable paging on a Cisco device"
     remote_conn.send("terminal length 0\n")
-    time.sleep(1)
+    time.sleep(0.2)
     output= remote_conn.recv(1000)
 
 def enable_Cisco(module,remote_conn):
     remote_conn.send("enable\n")
-    time.sleep(1)
+    time.sleep(0.2)
     output = remote_conn.recv(5000)
 
     remote_conn.send(module.params['password'] + "\n")
-    time.sleep(1)
+    time.sleep(0.2)
+    output = remote_conn.recv(5000)
+def configure_interface_cisco(module,remote_conn,file,interface):
+    file.write(interface)
+    remote_conn.send("conf t" + "\n")
+    time.sleep(0.2)
+    output = remote_conn.recv(5000)
+    var = interface.split()
+
+    remote_conn.send("interface " + var[1] + "\n")
+    time.sleep(0.2)
+    output = remote_conn.recv(5000)
+
+    remote_conn.send("interface " + var[1] + "\n")
+    time.sleep(0.2)
+    output = remote_conn.recv(5000)
+    #configure vlan
+    remote_conn.send("interfaces witchport acces vlan " + var[3] + "\n")
+    time.sleep(0.2)
     output = remote_conn.recv(5000)
 
 def get_vlan_arp(module,remote_conn,file,interfaces,addresses):
     remote_conn.send("show arp" + "\n")
-    time.sleep(1)
+    time.sleep(0.2)
     output = remote_conn.recv(5000)
     arpTable = output.split("\n")
     for x in xrange(0,len(addresses)):
@@ -42,13 +60,13 @@ def get_vlan_arp(module,remote_conn,file,interfaces,addresses):
         var = chaine[indices[0]].split("Vlan")
         numVlan = var[1]
         interfaces[x] = interfaces[x].rstrip()
-        file.write(interfaces[x] + " " + numVlan + "\n")
         #interfaces : [0] nom [1] interface interne [2] interface externe
-
+        interface = interfaces[x] + " " + numVlan + "\n"
+        configure_interface_cisco(module,remote_conn,file,interface)
 def get_neighbors_cisco(module,remote_conn,file):
     #recuperation des donnees
     remote_conn.send("show lldp neighbors" + "\n")
-    time.sleep(1)
+    time.sleep(0.2)
     output = remote_conn.recv(5000)
     lldpTable = output.split("\n")
     indices = [i for i, s in enumerate(lldpTable) if "Capability" in s]
@@ -72,14 +90,14 @@ def get_neighbors_cisco(module,remote_conn,file):
     for x in xrange(0,len(interfaces)):
         var = interfaces[x].split() 
         remote_conn.send("show lldp entry " + var[0] + "\n")
-        time.sleep(1)
+        time.sleep(0.2)
         output = remote_conn.recv(5000)
         tmp = output.split("\n")
 
         if "Cisco IOS Software" in output:
             #Cisco => show cdp
             remote_conn.send("show cdp entry *\n")
-            time.sleep(1)
+            time.sleep(0.2)
             output = remote_conn.recv(5000)
             tmp = output.split("-------------------------")
             for x in xrange(0,len(tmp)):
@@ -124,39 +142,6 @@ def get_lldp_cisco(module,result):
 def get_lldp_alcatel(module,result):
     print "hello"
 
-def Groupe(module):  
-    result = dict(
-        changed=False,
-        Titre='',
-        message=''
-    )
-    try:
-        remote_conn_pre = paramiko.SSHClient()
-        remote_conn_pre.load_system_host_keys()
-        remote_conn_pre.set_missing_host_key_policy(paramiko.AutoAddPolicy)
-
-        remote_conn_pre.connect(module.params['hostname'], username = module.params['username'], port=module.params['port'],password = module.params['password'],look_for_keys= False, allow_agent= False)
-        remote_conn = remote_conn_pre.invoke_shell()
-        disable_paging(remote_conn)
-        
-        file = open("/home/thibault/Ansible_Script/FILES/Result.txt","w")
-
-        remote_conn.send(" enable\n")
-        time.sleep(1)
-        output = remote_conn.recv(5000)
-
-        remote_conn.send(module.params['password'] + "\n")
-        time.sleep(1)
-        output = remote_conn.recv(5000)
-
-        result.update({
-        'changed': False,
-        'stdout': output,
-        'stdout_lines': list(to_lines(output))
-        })
-    finally:
-        remote_conn_pre.close()
-        module.exit_json(**result)
 def main():
     module_args = dict(
         username=dict(type='str', required=True),
