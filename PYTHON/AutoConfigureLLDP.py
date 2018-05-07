@@ -122,7 +122,7 @@ def get_lldp_cisco(module,result):
         remote_conn_pre.set_missing_host_key_policy(paramiko.AutoAddPolicy)
         remote_conn_pre.connect(module.params['hostname'], username = module.params['username'], port=module.params['port'],password = module.params['password'],look_for_keys= False, allow_agent= False)
         remote_conn = remote_conn_pre.invoke_shell()
-        file = open("/home/thibault/Ansible_Script/FILES/Result.txt","w")
+        file = open("./Result.txt","w")
 
         disable_paging(remote_conn)
         enable_Cisco(module,remote_conn)
