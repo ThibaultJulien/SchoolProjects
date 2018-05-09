@@ -12,62 +12,42 @@ from ansible.module_utils.network.common.utils import ComplexList
 from ansible.module_utils.network.common.parsing import Conditional
 from ansible.module_utils.six import string_types
 from ansible.utils.display import Display
+from ansible.my_modules.ios import enable_cisco
+from ansible.my_modules.common import run_command
 
-def disable_paging(remote_conn):
-    "Disable paging on a Cisco device"
-    remote_conn.send("terminal length 0\n")
-    time.sleep(0.2)
-    output= remote_conn.recv(1000)
 
-def enable_Cisco(module,remote_conn):
-    remote_conn.send("enable\n")
-    time.sleep(0.2)
-    output = remote_conn.recv(5000)
-
-    remote_conn.send(module.params['password'] + "\n")
-    time.sleep(0.2)
-    output = remote_conn.recv(5000)
 def configure_interface_cisco(module,remote_conn,file,interface):
+    #interfaces : [0] nom [1] interface interne [2] interface externe
     file.write(interface)
-    remote_conn.send("conf t" + "\n")
-    time.sleep(0.2)
-    output = remote_conn.recv(5000)
+    output = run_command(remote_conn,command="conf t")
     var = interface.split()
 
-    remote_conn.send("interface " + var[1] + "\n")
-    time.sleep(0.2)
-    output = remote_conn.recv(5000)
+    output = run_command(remote_conn,"interface " + var[1])
 
-    remote_conn.send("interface " + var[1] + "\n")
-    time.sleep(0.2)
-    output = remote_conn.recv(5000)
     #configure vlan
-    remote_conn.send("interfaces witchport acces vlan " + var[3] + "\n")
-    time.sleep(0.2)
-    output = remote_conn.recv(5000)
+    output = run_command(remote_conn,"interface " + var[3])
 
-def get_vlan_arp(module,remote_conn,file,interfaces,addresses):
-    remote_conn.send("show arp" + "\n")
-    time.sleep(0.2)
-    output = remote_conn.recv(5000)
-    arpTable = output.split("\n")
-    for x in xrange(0,len(addresses)):
-        #remove \n
-        tmp = addresses[x].rstrip()
-        indices = [i for i, s in enumerate(arpTable) if tmp in s]
-        chaine = arpTable[indices[0]].split()
-        indices = [i for i, s in enumerate(chaine) if "Vlan" in s]
-        var = chaine[indices[0]].split("Vlan")
-        numVlan = var[1]
-        interfaces[x] = interfaces[x].rstrip()
-        #interfaces : [0] nom [1] interface interne [2] interface externe
-        interface = interfaces[x] + " " + numVlan + "\n"
-        configure_interface_cisco(module,remote_conn,file,interface)
+#def get_vlan_arp(module,remote_conn,file,interfaces,addresses):
+#    remote_conn.send("show arp" + "\n")
+#    time.sleep(0.2)
+#    output = remote_conn.recv(5000)
+#    arpTable = output.split("\n")
+#    for x in xrange(0,len(addresses)):
+#        #remove \n
+#        file.write(addresses[x])
+#        tmp = addresses[x].rstrip()
+#        indices = [i for i, s in enumerate(arpTable) if tmp in s]
+#        chaine = arpTable[indices[0]].split()
+#        indices = [i for i, s in enumerate(chaine) if "Vlan" in s]
+#        var = chaine[indices[0]].split("Vlan")
+#        numVlan = var[1]
+#        interfaces[x] = interfaces[x].rstrip()
+#        #interfaces : [0] nom [1] interface interne [2] interface externe
+#        interface = interfaces[x] + " " + numVlan + "\n"
+#        #configure_interface_cisco(module,remote_conn,file,interface)
 def get_neighbors_cisco(module,remote_conn,file):
     #recuperation des donnees
-    remote_conn.send("show lldp neighbors" + "\n")
-    time.sleep(0.2)
-    output = remote_conn.recv(5000)
+    output = run_command(remote_conn,command="show lldp neighbors")
     lldpTable = output.split("\n")
     indices = [i for i, s in enumerate(lldpTable) if "Capability" in s]
     for x in xrange(0,indices[1]+1):
@@ -89,16 +69,13 @@ def get_neighbors_cisco(module,remote_conn,file):
     addresses = []
     for x in xrange(0,len(interfaces)):
         var = interfaces[x].split() 
-        remote_conn.send("show lldp entry " + var[0] + "\n")
-        time.sleep(0.2)
-        output = remote_conn.recv(5000)
+        output = run_command(remote_conn,command= "show lldp entry " + var[0])
         tmp = output.split("\n")
 
         if "Cisco IOS Software" in output:
             #Cisco => show cdp
-            remote_conn.send("show cdp entry *\n")
-            time.sleep(0.2)
-            output = remote_conn.recv(5000)
+
+            output = run_command(remote_conn,command= "show cdp entry")
             tmp = output.split("-------------------------")
             for x in xrange(0,len(tmp)):
                 if var[0] in tmp[x]:
@@ -112,9 +89,10 @@ def get_neighbors_cisco(module,remote_conn,file):
         else:
             addresses.append(var[0] + "\n")
     #adresse IP pour Cisco num serie pour Alcatel Toutes donnees OK pour Recuperer la table ARP
-    get_vlan_arp(module,remote_conn,file,interfaces,addresses)
+    #get_vlan_arp(module,remote_conn,file,interfaces,addresses)
 
 def get_lldp_cisco(module,result):
+    file = open("./Result.txt","w")
     try:
         #Instanciation de la connection au device
         remote_conn_pre = paramiko.SSHClient()
@@ -122,13 +100,9 @@ def get_lldp_cisco(module,result):
         remote_conn_pre.set_missing_host_key_policy(paramiko.AutoAddPolicy)
         remote_conn_pre.connect(module.params['hostname'], username = module.params['username'], port=module.params['port'],password = module.params['password'],look_for_keys= False, allow_agent= False)
         remote_conn = remote_conn_pre.invoke_shell()
-        file = open("./Result.txt","w")
-
-        disable_paging(remote_conn)
-        enable_Cisco(module,remote_conn)
+        enable_cisco(remote_conn,password = module.params['password'])
         get_neighbors_cisco(module,remote_conn,file)
-
-        
+        file.write("\n OK \n")
         result.update({
         'changed': False,
         'stdout': output,
@@ -148,7 +122,6 @@ def main():
         password=dict(type='str', required=True),
         hostname=dict(type='str', required=True),
         port=dict(type='int'),
-        aim=dict(type='str', required=True),
         os=dict(type='str', required=True),
     )
     result = dict(
