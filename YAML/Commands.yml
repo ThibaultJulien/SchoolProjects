@@ -1,0 +1,24 @@
+---
+- name: Show Run
+  hosts: CISCO
+  gather_facts: no
+  connection: local
+  remote_user: admin
+  become: yes
+  become_method: enable
+  become_user: admin
+
+  tasks:
+    - name: Commands
+      Commands:
+        commands: 
+          - sh run
+          - sh version       
+        username: admin
+        password: switch
+        hostname: "{{ ansible_host }}"
+        port: 22
+        os: "{{ ansible_network_os }}"
+      register: Output
+
+    - debug: var=Output.message
