@@ -1,4 +1,3 @@
-
 import base64
 import paramiko
 import sys
@@ -16,7 +15,7 @@ from ansible.my_modules.ios import enable_cisco
 from ansible.my_modules.common import run_command
 
 
-def configure_interface_cisco(module,remote_conn,file,interface):
+def configure_interface_cisco(module,remote_conn,interface):
     # L'interface contient : 0 SysName 1 vlan 2 IP 3 Interface
     output = run_command(remote_conn,command="conf t")
     var = interface.split()
@@ -25,7 +24,7 @@ def configure_interface_cisco(module,remote_conn,file,interface):
     output = run_command(remote_conn,command="switchport acces vlan " + var[1])
     output = run_command(remote_conn,command="end")
 
-def configure_interface_alcatel(module,remote_conn,file,interface):
+def configure_interface_alcatel(module,remote_conn,interface):
     var = interface.split()
     output = run_command(remote_conn,command="vlan  " + var[0] + " port default "+ var[2])
     #Si linkagg alors recherche du linkagg et configuration de celui-ci
@@ -36,7 +35,7 @@ def configure_interface_alcatel(module,remote_conn,file,interface):
         tmp = linkagg[indices[0]].split()
         output = run_command(remote_conn,command="vlan  " + var[0] + " port default "+ tmp[4])
 
-def get_neighbors_cisco(module,remote_conn,file):
+def get_neighbors_cisco(module,remote_conn):
     #recuperation des donnees
     output = run_command(remote_conn,command="show lldp entry *")
     lldpTable = output.split("-------------------------")
@@ -68,10 +67,9 @@ def get_neighbors_cisco(module,remote_conn,file):
             indices = [i for i, s in enumerate(chaine) if name in s]
             tmp = chaine[indices[0]].split()
             interface = interface + "\t" + tmp[1] 
-            file.write(interface + "\n")
             # L'interface contient : 0 SysName 1 vlan 2 IP 3 Interface
-            configure_interface_cisco(module,remote_conn,file,interface)
-def get_neighbors_alcatel(module,remote_conn,file):
+            configure_interface_cisco(module,remote_conn,interface)
+def get_neighbors_alcatel(module,remote_conn):
     #recuperation des donnees
     output = run_command(remote_conn,command="show lldp remote-system")
     lldpTable = output.split("Remote LLDP Agents on Local Slot/Port ")
@@ -94,38 +92,33 @@ def get_neighbors_alcatel(module,remote_conn,file):
             chaine = var[0].split(":")
             interface = interface + "\t" + chaine[0].rstrip() 
             #infos completes
-            file.write(interface + "\n")
-            configure_interface_alcatel(module,remote_conn,file,interface)
+            configure_interface_alcatel(module,remote_conn,interface)
 
 
 def get_lldp_cisco(module,remote_conn,result):
-    file = open("./Result.txt","w")
     try:
         #Instanciation de la connection au device
         enable_cisco(remote_conn,password = module.params['password'])
-        get_neighbors_cisco(module,remote_conn,file)
+        get_neighbors_cisco(module,remote_conn)
         result.update({
         'changed': False,
         'stdout': output,
         'stdout_lines': list(to_lines(output))
         })
     finally:
-        file.close()
         remote_conn.close()
         module.exit_json(**result)
 
 def get_lldp_alcatel(module,remote_conn,result):
-    file = open("./Result.txt","w")
     try:
         
-        get_neighbors_alcatel(module,remote_conn,file)
+        get_neighbors_alcatel(module,remote_conn)
         result.update({
         'changed': False,
         'stdout': output,
         'stdout_lines': list(to_lines(output))
         })
     finally:
-        file.close()
         remote_conn.close()
         module.exit_json(**result)
 
