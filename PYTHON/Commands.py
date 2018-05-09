@@ -14,10 +14,6 @@ from ansible.module_utils.six import string_types
 from ansible.utils.display import Display
 from ansible.my_modules.ios import enable_cisco
 from ansible.my_modules.common import run_command
-#hostname = sys.argv[1]
-#password = sys.argv[2]
-#os = sys.argv[3]
-#command = sys.argv[3]
 
 
 

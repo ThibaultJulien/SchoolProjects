@@ -1,6 +1,6 @@
 ---
 - name: Find LLDP
-  hosts: CISCO
+  hosts: ALCATEL
   gather_facts: no
   connection: local
   remote_user: admin
@@ -10,7 +10,7 @@
 
   tasks:
     - name: Find LLDP
-      AutoConfigureLLDP:
+      AutoConfigureLLDPB:
         username: admin
         password: switch
         hostname: "{{ ansible_host }}"
